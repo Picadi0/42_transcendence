@@ -1,0 +1,103 @@
+services:
+  backend:
+    build:
+      context: ./srcs/backend
+    container_name: django
+    entrypoint: |
+      bash -c "
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    env_file: .env
+    ports:
+      - ${DJANGO_PORT}:8000
+    volumes:
+      - backend_vol:/backend
+      - /backend/static
+    depends_on:
+      - postgresql
+      - redis
+    networks:
+      - trans_network
+    restart: always
+
+  nginx:
+    build:
+      context: ./srcs/nginx
+    container_name: nginx
+    env_file: .env
+    ports:
+      - ${NGINX_PORT}:80
+      - ${NGINX_PORT_SSL}:443
+    depends_on:
+      - backend
+      #  - grafana
+      - redis
+      - postgresql
+    volumes:
+      - ./srcs/nginx:/etc/nginx/conf.d
+      - ./srcs/backend/static:/usr/share/nginx/html/static
+      - ./srcs/frontend:/usr/share/nginx/html
+      - ./srcs/frontend/static:/usr/share/nginx/html/static
+    networks:
+      - trans_network
+    restart: always
+
+  postgresql:
+    image: postgres:17.0
+    container_name: postgres
+    env_file: .env
+    ports:
+      - ${DB_PORT}:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - trans_network
+    restart: always
+
+  redis:
+    image: redis:7.4.1-alpine
+    container_name: redis
+    env_file: .env
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - redis_data:/data
+    command:
+      - redis-server
+      - --appendonly yes
+      - --maxmemory 10mb
+      - --maxmemory-policy allkeys-lru
+    networks:
+      - trans_network
+    restart: always
+
+#  grafana:
+#    image: grafana/grafana:latest
+#    container_name: grafana
+#    env_file: .env
+#    ports:
+#      - ${GRAFANA_PORT}:3000
+#    volumes:
+#      - grafana-data:/var/lib/grafana
+#    networks:
+#      - trans_network
+#    restart: always
+
+volumes:
+  backend_vol:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./srcs/backend/
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  trans_network:
+    driver: bridge
