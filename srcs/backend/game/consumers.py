@@ -54,7 +54,73 @@ class GameConsumer(AsyncWebsocketConsumer):
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        await self.endOfGame()
+        
 
+    # Gruptan gelen mesaji kullaniciya ilet
+    async def receive(self, text_data):
+        try:
+            text_data_json = json.loads(text_data)
+            if not hasattr(self, "p1_y"):
+                self.p1_y = 50
+            if not hasattr(self, "p2_y"):
+                self.p2_y = 50
+            if "type" not in text_data_json:
+                await self.send(
+                    json.dumps(
+                        {
+                            "status": "error",
+                            "message": "There must be type key as json format",
+                        }
+                    )
+                )
+            else:
+                type = text_data_json["type"]
+                if type == "ping":
+                    await self.send(
+                        json.dumps(
+                            {
+                                "status": "success",
+                                "message": "pong",
+                            }
+                        )
+                    )
+                elif type == "disconnect":
+                    await self.close()
+                elif type == "move":
+                    direction = text_data_json["direction"]
+                    if direction == "up":
+                        if self.isHost and self.p1_y > 0 and self.p1_y <= 100:
+                            self.p1_y -= 2
+                            await self.send_msg({"type": "move", "p1_y": self.p1_y, "user_id": self.user_id})
+                        elif not self.isHost and self.p2_y > 0 and self.p2_y <= 100:
+                            self.p2_y -= 2
+                            await self.send_msg({"type": "move", "p2_y": self.p2_y, "user_id": self.user_id})
+                    elif direction == "down":
+                        if self.isHost and self.p1_y >= 0 and self.p1_y < 100:
+                            self.p1_y += 2
+                            await self.send_msg({"type": "move", "p1_y": self.p1_y, "user_id": self.user_id})
+                        elif not self.isHost and self.p2_y >= 0 and self.p2_y < 100:
+                            self.p2_y += 2
+                            await self.send_msg({"type": "move", "p2_y": self.p2_y, "user_id": self.user_id})
+                    logger.error(f"p1_y ={self.p1_y} p2_y={self.p2_y}")
+        except Exception as e:
+            logger.error(f"receive Error :{e}")
+
+    # Mesaji gruba gönder
+    async def send_msg(self, jsonmsg):
+        await self.channel_layer.group_send(
+            self.group_name, {"type": "group_message", "jsonmsg": jsonmsg}
+        )
+
+    # Grup mesajini işle
+    async def group_message(self, event):
+        jsonmsg = event["jsonmsg"]
+
+        # Mesaji WebSocket üzerinden gönder
+        await self.send(json.dumps(jsonmsg))
+
+    async def endOfGame(self):
         try:
             # Use sync_to_async to run synchronous database queries
             room = await sync_to_async(
@@ -96,6 +162,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     logger.error(
                         f"Kullanici {self.user_id} odadan ayrildi. Kazanan: {remaining_player_id}"
                     )
+                    await self.send_msg({"type": "disconnect", "Winner": remaining_player_id})
                 else:
                     logger.error(
                         f"Kullanici {self.user_id} odadan ayrildi, Kazanan olmadi çünkü rakip yoktu."
@@ -105,52 +172,4 @@ class GameConsumer(AsyncWebsocketConsumer):
             else:
                 logger.error(f"Websocket disconnect olurken {self.room_id} bulunamadi")
         except Exception as e:
-            logger.error(f"disconnect metodunda hata: {e}")
-
-    # Gruptan gelen mesaji kullaniciya ilet
-    async def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        try:
-            if "type" not in text_data_json:
-                await self.send(
-                    json.dumps(
-                        {
-                            "status": "error",
-                            "message": "There must be type key as json format",
-                        }
-                    )
-                )
-            else:
-                type = text_data_json["type"]
-                if type == "ping":
-                    await self.send(
-                        json.dumps(
-                            {
-                                "status": "success",
-                                "message": "pong",
-                            }
-                        )
-                    )
-                elif type == "p1_up":
-                    self.p1_y += 5
-                elif type == "p1_down":
-                    self.p1_y -= 5
-                elif type == "p2_up":
-                    self.p2_y += 5
-                elif type == "p2_down":
-                    self.p2_y -= 5
-        except Exception as e:
-            logger.error(f"receive Error :{e}")
-
-    # Mesaji gruba gönder
-    async def send_msg(self, msg):
-        await self.channel_layer.group_send(
-            self.group_name, {"type": "group_message", "message": msg}
-        )
-
-    # Grup mesajini işle
-    async def group_message(self, event):
-        message = event["message"]
-
-        # Mesaji WebSocket üzerinden gönder
-        await self.send(json.dumps({"message": message}))
+            logger.error(f"endOfGame metodunda hata: {e}")

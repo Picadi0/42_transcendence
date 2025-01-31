@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Butonlar</title>
+    <title>Pong Game</title>
     <style>
         body {
             font-family: sans-serif;
@@ -15,6 +15,25 @@
             margin: 0;
             background-color: rgb(46, 49, 50);
             color: white;
+            overflow: hidden;
+        }
+        .form-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 2;
+        }
+        #gameContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+        #gameCanvas {
+            background-color: #1a1a1a;
         }
         .button-container {
             display: flex;
@@ -36,6 +55,7 @@
         #status {
             margin-top: 20px;
             font-size: 1.5em;
+            z-index: 2;
         }
         .hidden {
             display: none;
@@ -47,12 +67,6 @@
             width: 200px;
             border-radius: 5px;
             border: 1px solid #ccc;
-        }
-        .form-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
         }
         .test-ping-container {
             display: flex;
@@ -69,53 +83,141 @@
             <button id="joinBtn">Join</button>
         </div>
     </div>
+    
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="status"></div>
+    
     <div class="test-ping-container">
         <button id="testBtn" class="hidden">test</button>
         <button id="pingBtn" class="hidden">ping</button>
     </div>
-    <div id="status"></div>
+
     <script>
+        class PongGame {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.paddleWidth = 15;
+                this.paddleHeight = 100;
+                this.p1_y = 50; // Yüzde cinsinden pozisyon
+                this.p2_y = 50;
+                
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+            }
+
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.draw();
+            }
+
+            updatePaddles(p1, p2) {
+                if(p1 !== undefined) this.p1_y = p1;
+                if(p2 !== undefined) this.p2_y = p2;
+                this.draw();
+            }
+
+            draw() {
+                // Temizle
+                this.ctx.fillStyle = '#1a1a1a';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Paddle'ları çiz
+                this.ctx.fillStyle = '#ffffff';
+                
+                // Sol paddle (Host)
+                const p1Y = (this.canvas.height - this.paddleHeight) * (this.p1_y / 100);
+                this.ctx.fillRect(
+                    20, 
+                    p1Y,
+                    this.paddleWidth,
+                    this.paddleHeight
+                );
+
+                // Sağ paddle (Katılımcı)
+                const p2Y = (this.canvas.height - this.paddleHeight) * (this.p2_y / 100);
+                this.ctx.fillRect(
+                    this.canvas.width - 20 - this.paddleWidth,
+                    p2Y,
+                    this.paddleWidth,
+                    this.paddleHeight
+                );
+            }
+        }
+
+        let game = null;
+        let isHost = false;
         const hostBtn = document.getElementById('hostBtn');
         const joinBtn = document.getElementById('joinBtn');
         const testBtn = document.getElementById('testBtn');
         const pingBtn = document.getElementById('pingBtn');
         const statusDiv = document.getElementById('status');
         const userIdInput = document.getElementById('userIdInput');
+        const gameContainer = document.getElementById('gameContainer');
         let websocket;
         let roomID;
         let userID;
 
-        // WebSocket bağlantısını kur
         function connectWebSocket(path) {
             websocket = new WebSocket('wss://' + window.location.host + path);
             
             websocket.onopen = () => {
                 console.log("WebSocket bağlantısı açıldı:", path);
-                testBtn.classList.remove('hidden'); // Test butonunu göster
-                pingBtn.classList.remove('hidden'); // Ping butonunu göster
-                statusDiv.textContent = "Bağlandı";
+                gameContainer.style.display = 'block';
+                document.querySelector('.form-container').style.display = 'none';
+                testBtn.classList.remove('hidden');
+                pingBtn.classList.remove('hidden');
+                statusDiv.textContent = "Bağlandı - Oda: " + roomID;
+                
+                // Oyunu başlat
+                const canvas = document.getElementById('gameCanvas');
+                game = new PongGame(canvas);
+                setupKeyListeners();
             };
 
             websocket.onmessage = (event) => {
-                console.log("Gelen mesaj:", event.data);
+                const data = JSON.parse(event.data);
+                console.log("Gelen mesaj:", data);
+                
+                if(data.type === 'move') {
+                    if(game) {
+                        game.updatePaddles(data.p1_y, data.p2_y);
+                    }
+                }
+                else if(data.type === 'disconnect') {
+                    gameContainer.style.display = 'none';
+                    document.querySelector('.form-container').style.display = 'flex';
+                    game = null;
+                    websocket.close();
+                    statusDiv.textContent = `Oyun sonlandı! Kazanan: ${data.Winner}`;
+                }
             };
 
             websocket.onerror = (error) => {
                 console.error("WebSocket hatası:", error);
-                testBtn.classList.add('hidden'); // Test butonunu gizle
-                pingBtn.classList.add('hidden'); // Ping butonunu gizle
-                statusDiv.textContent = "WebSocket hatası: " + error.message;
+                gameContainer.style.display = 'none';
+                document.querySelector('.form-container').style.display = 'flex';
+                testBtn.classList.add('hidden');
+                pingBtn.classList.add('hidden');
+                statusDiv.textContent = "Hata: " + error.message;
+                removeKeyListeners();
             };
 
             websocket.onclose = () => {
                 console.log("WebSocket bağlantısı kapandı.");
-                testBtn.classList.add('hidden'); // Test butonunu gizle
-                pingBtn.classList.add('hidden'); // Ping butonunu gizle
+                gameContainer.style.display = 'none';
+                document.querySelector('.form-container').style.display = 'flex';
+                testBtn.classList.add('hidden');
+                pingBtn.classList.add('hidden');
                 statusDiv.textContent = "Bağlantı kapandı.";
+                removeKeyListeners();
             };
         }
 
-        // POST isteği gönder
         async function sendPostRequest(url, data) {
             try {
                 const response = await fetch(url, {
@@ -125,15 +227,13 @@
                     },
                     body: JSON.stringify(data),
                 });
-                const result = await response.json();
-                return result;
+                return await response.json();
             } catch (error) {
                 console.error("POST isteği hatası:", error);
                 return { status: "error", message: "İstek gönderilirken bir hata oluştu." };
             }
         }
 
-        // Host butonu işlevi
         hostBtn.addEventListener('click', async () => {
             userID = userIdInput.value.trim();
             if (!userID) {
@@ -144,18 +244,14 @@
             const response = await sendPostRequest(`https://${window.location.host}/game/host/`, { user_id: userID });
 
             if (response.status === "success") {
-                roomID = response.room_id; // Sunucudan gelen room_id'yi al
-                alert("Oda ID'niz: " + roomID);
-                document.querySelector('.form-container').classList.add('hidden'); // Formu gizle
+                roomID = response.room_id;
+                isHost = true;
                 connectWebSocket('/ws/pong/' + roomID + '/' + userID);
-            } else if (response.status === "error") {
-                statusDiv.textContent = "Hata: " + (response.message || "Bilinmeyen hata");
             } else {
-                statusDiv.textContent = "Hata: Geçersiz yanıt formatı.";
+                statusDiv.textContent = "Hata: " + (response.message || "Bilinmeyen hata");
             }
         });
 
-        // Join butonu işlevi
         joinBtn.addEventListener('click', async () => {
             userID = userIdInput.value.trim();
             if (!userID) {
@@ -169,38 +265,58 @@
                 return;
             }
 
-            const response = await sendPostRequest(`https://${window.location.host}/game/join/`, { user_id: userID, room_id: roomID });
+            const response = await sendPostRequest(`https://${window.location.host}/game/join/`, { 
+                user_id: userID, 
+                room_id: roomID 
+            });
 
             if (response.status === "success") {
-                roomID = response.room_id; // Sunucudan gelen room_id'yi al
-                document.querySelector('.form-container').classList.add('hidden'); // Formu gizle
+                isHost = false;
                 connectWebSocket('/ws/pong/' + roomID + '/' + userID);
-            } else if (response.status === "error") {
+            } else {
                 statusDiv.textContent = "Hata: " + (response.message || "Bilinmeyen hata");
-            } else {
-                statusDiv.textContent = "Hata: Geçersiz yanıt formatı.";
             }
         });
 
-        // testBtn butonu işlevi
         testBtn.addEventListener('click', () => {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({ iamMalformed: 'trythecatchmeifyoucan' }));
-                console.log("Yasaklı veri gönderildi: Oda ID -", roomID, "Kullanıcı ID -", userID);
-            } else {
-                console.error("WebSocket bağlantısı açık değil veya tanımlı değil.");
+            if (websocket?.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify({ iamMalformed: 'test' }));
             }
         });
 
-        // pingBtn butonu işlevi
         pingBtn.addEventListener('click', () => {
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
+            if (websocket?.readyState === WebSocket.OPEN) {
                 websocket.send(JSON.stringify({ "type": "ping" }));
-                console.log("Ping mesajı gönderildi: Oda ID -", roomID, "Kullanıcı ID -", userID);
-            } else {
-                console.error("WebSocket bağlantısı açık değil veya tanımlı değil.");
             }
         });
+
+        function setupKeyListeners() {
+            document.addEventListener('keydown', handleKeyPress);
+        }
+
+        function removeKeyListeners() {
+            document.removeEventListener('keydown', handleKeyPress);
+        }
+
+        function handleKeyPress(event) {
+            if (websocket?.readyState === WebSocket.OPEN) {
+                let direction;
+                if (event.key === 'ArrowUp' || event.key.toLowerCase() === 'w') {
+                    direction = 'up';
+                } else if (event.key === 'ArrowDown' || event.key.toLowerCase() === 's') {
+                    direction = 'down';
+                }
+
+                if (direction) {
+                    websocket.send(JSON.stringify({ 
+                        type: 'move', 
+                        direction: direction,
+                        user_id: userID,
+                        room_id: roomID
+                    }));
+                }
+            }
+        }
     </script>
 </body>
 </html>
