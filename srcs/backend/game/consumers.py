@@ -131,6 +131,14 @@ class GameConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     )
+                elif type == "p1_up":
+                    self.p1_y += 5
+                elif type == "p1_down":
+                    self.p1_y -= 5
+                elif type == "p2_up":
+                    self.p2_y += 5
+                elif type == "p2_down":
+                    self.p2_y -= 5
         except Exception as e:
             logger.error(f"receive Error :{e}")
 
