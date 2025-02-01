@@ -27,8 +27,8 @@
         }
         #gameContainer {
             display: none;
-            width: 800px;
-            height: 600px;
+            width: 1280px;
+            height: 720px;
             position: relative;
             margin: 0 auto;
         }
@@ -55,10 +55,10 @@
             background-color: #bca220;
         }
        #status {
-            position: absolute; /* Eklenen: mutlak konumlandırma */
-            top: 10px;       /* Eklenen: yukarıdan 10px mesafe */
-            left: 50%;      /* Eklenen: sola 50% */
-            transform: translateX(-50%); /* Eklenen: sola doğru kaydırma */
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             font-size: 1.5em;
             z-index: 2;
             text-align: center;
@@ -71,10 +71,24 @@
             border-radius: 5px;
             border: 1px solid #ccc;
         }
+        #scores {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5em;
+            z-index: 2;
+        }
+        /* Eklenen: Oyun alanını ortalamak için */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
     <div id="status"></div>
+    <div id="scores">P1: 0 | P2: 0</div>
 
     <div class="form-container">
         <input type="text" id="userIdInput" placeholder="Kullanıcı ID'nizi girin">
@@ -85,7 +99,7 @@
     </div>
     
     <div id="gameContainer">
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <canvas id="gameCanvas" width="1280" height="720"></canvas>
     </div>
 
 
@@ -94,10 +108,15 @@
             constructor(canvas) {
                 this.canvas = canvas;
                 this.ctx = canvas.getContext('2d');
-                this.paddleWidth = 15;
+                this.paddleWidth = 30;
                 this.paddleHeight = 100;
                 this.p1_y = 50; // Yüzde cinsinden pozisyon
                 this.p2_y = 50;
+                this.ball_x = 50; // Topun yüzdelik x pozisyonu
+                this.ball_y = 50; // Topun yüzdelik y pozisyonu
+                this.p1_score = 0;
+                this.p2_score = 0;
+                this.ball_speed = 2;
                 this.draw();
             }
 
@@ -105,6 +124,20 @@
                 if(p1 !== undefined) this.p1_y = p1;
                 if(p2 !== undefined) this.p2_y = p2;
                 this.draw();
+            }
+
+            updateBall(ball_x, ball_y, p1_score, p2_score, ball_speed) {
+                this.ball_x = ball_x;
+                this.ball_y = ball_y;
+                this.p1_score = p1_score;
+                this.p2_score = p2_score;
+                this.ball_speed = ball_speed;
+                this.updateScoreDisplay();
+                this.draw();
+            }
+
+            updateScoreDisplay(){
+                document.getElementById('scores').textContent = `P1: ${this.p1_score} | P2: ${this.p2_score}`;
             }
 
             draw() {
@@ -132,6 +165,15 @@
                     this.paddleWidth,
                     this.paddleHeight
                 );
+
+                // Topu çiz
+                this.ctx.beginPath();
+                const ballX = this.canvas.width * (this.ball_x / 100);
+                const ballY = this.canvas.height * (this.ball_y / 100);
+                this.ctx.arc(ballX, ballY, 10, 0, Math.PI * 2);
+                this.ctx.fillStyle = 'yellow';
+                this.ctx.fill();
+                this.ctx.closePath();
             }
         }
 
@@ -142,6 +184,7 @@
         const statusDiv = document.getElementById('status');
         const userIdInput = document.getElementById('userIdInput');
         const gameContainer = document.getElementById('gameContainer');
+       
         let websocket;
         let roomID;
         let userID;
@@ -170,14 +213,17 @@
                     if(game) {
                         game.updatePaddles(data.p1_y, data.p2_y);
                     }
-                }
-                else if(data.type === 'disconnect') {
+                } else if (data.type === 'update_ball') {
+                    if(game) {
+                        game.updateBall(data.ball_x, data.ball_y, data.p1_score, data.p2_score, data.ball_speed);
+                    }
+                } else if(data.type === 'disconnect') {
                     gameContainer.style.display = 'none';
                     document.querySelector('.form-container').style.display = 'flex';
                     game = null;
                     websocket.close();
                     statusDiv.textContent = `Oyun sonlandı! Kazanan: ${data.Winner}`;
-                }
+                } 
             };
 
             websocket.onerror = (error) => {
@@ -187,18 +233,20 @@
                 statusDiv.textContent = "Hata: " + error.message;
                 removeKeyListeners();
                 removeScrollListener();
+
             };
 
             websocket.onclose = () => {
                 console.log("WebSocket bağlantısı kapandı.");
                 gameContainer.style.display = 'none';
                 document.querySelector('.form-container').style.display = 'flex';
-                if (!statusDiv.textContent.startsWith("Oyun sonlandı! Kazanan:"))
+                 if (!statusDiv.textContent.startsWith("Oyun sonlandı! Kazanan:"))
                 {
                     statusDiv.textContent = "Bağlantı kapandı.";
                 }
                 removeKeyListeners();
                 removeScrollListener();
+
             };
         }
 
@@ -278,7 +326,7 @@
             document.removeEventListener('wheel', handleScroll);
         }
 
-        function handleKeyPress(event) {
+       function handleKeyPress(event) {
             if (websocket?.readyState === WebSocket.OPEN) {
                 let direction;
                 if (event.key === 'ArrowUp' || event.key.toLowerCase() === 'w') {
@@ -288,10 +336,12 @@
                 }
 
                 if (direction) {
-                    websocket.send(JSON.stringify({ 
-                        type: 'move', 
-                        direction: direction,
-                    }));
+                     for (let i = 0; i < 10; i++) {
+                         websocket.send(JSON.stringify({
+                             type: 'move',
+                             direction: direction,
+                         }));
+                     }
                 }
             }
         }
@@ -306,10 +356,12 @@
                 }
 
                 if (direction) {
-                    websocket.send(JSON.stringify({ 
-                        type: 'move', 
-                        direction: direction,
-                    }));
+                    for (let i = 0; i < 10; i++) {
+                         websocket.send(JSON.stringify({
+                             type: 'move',
+                             direction: direction,
+                         }));
+                     }
                 }
             }
         }

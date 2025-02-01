@@ -24,22 +24,25 @@ class GameConsumer(AsyncWebsocketConsumer):
             GAME_STATES[self.room_id] = {
                 "p1_y": 50,
                 "p2_y": 50,
+                "ball_x": 50,
+                "ball_y": 50,
+                "ball_dx": 0.6,  # Topun yatay hızı
+                "ball_dy": 0.6,  # Topun dikey hızı
+                "ball_speed": 0.6, # Topun hız ayarı için değişken
+                "p1_score": 0,
+                "p2_score": 0,
                 "startGame": False,
-                "isConnected": False,
             }
-
+        self.isConnected = False
         self.game_state = GAME_STATES[self.room_id]
         
 
         # Kullaniciyi channel gruba ekle
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         userCanJoinRoom = False
-        sendStartBroadCast = False
         try:
-            # Fetch all rooms and evaluate the QuerySet synchronously
             rooms = await sync_to_async(list)(TMPGameDB.objects.all())
 
-            # Check if user is in any room (player1 or player2) using in-memory list
             for room in rooms:
                 if room.room_id == self.room_id:
                     if room.player1_id == self.user_id:
@@ -47,11 +50,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                         userCanJoinRoom = True
                     elif room.player2_id == self.user_id:
                         self.isHost = False
+                        self.game_state['startGame'] = True
                         userCanJoinRoom = True
                     else:
                         userCanJoinRoom = False
-                    if room.player1_id and room.player2_id:
-                        sendStartBroadCast = True
                     break
 
         except Exception as e:
@@ -61,10 +63,9 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         if userCanJoinRoom:
             await self.accept()
+            self.isConnected = True
             asyncio.create_task(self.update())
-            self.game_state["isConnected"] = True
             logger.error(f"{self.user_id} şu oyuna {self.room_id} katildi")
-            logger.error(f"Herkes hazir mi status {sendStartBroadCast}")
         else:
             logger.error(
                 f"error: {self.user_id} şu oyuna {self.room_id} katilamadi çünkü gameDb'de bulunamadi"
@@ -73,26 +74,62 @@ class GameConsumer(AsyncWebsocketConsumer):
 
 
     async def update(self):
-        while self.game_state["isConnected"]:
-            if self.game_state["startGame"] == False:
-                logger.error("Update Calisiyor")
-                rooms = await sync_to_async(list)(TMPGameDB.objects.all())
-                for room in rooms:
-                    if room.room_id == self.room_id:
-                        if room.player1_id and room.player2_id:
-                            self.game_state["startGame"] = True
-                await asyncio.sleep(1)
-            else:
-                self.update_ball()
+        while self.isConnected:
+            if self.game_state['startGame']:
+                await self.update_ball()
                 await asyncio.sleep(0.016)#60 fpsmişmiş
+            else:
+                logger.error("oyun baslamasi bekleniyor")
+                await asyncio.sleep(1)
 
     async def update_ball(self):
-        return
+        # Topun pozisyonunu güncelle
+        self.game_state["ball_x"] += self.game_state["ball_dx"] * self.game_state["ball_speed"]
+        self.game_state["ball_y"] += self.game_state["ball_dy"] * self.game_state["ball_speed"]
+
+        # Topun canvas sınırlarına çarpma kontrolü
+        if self.game_state["ball_y"] <= 0 or self.game_state["ball_y"] >= 100:
+            self.game_state["ball_dy"] *= -1  # Dikey yönü tersine çevir
+        
+        # Paddle'lara çarpma kontrolü
+        if (
+            self.game_state["ball_x"] <= 5
+            and self.game_state["ball_y"] > (self.game_state["p1_y"] - 10)
+            and self.game_state["ball_y"] < (self.game_state["p1_y"] + 10 + 10)
+        ):
+            self.game_state["ball_dx"] *= -1  # Yatay yönü tersine çevir
+
+        if(
+            self.game_state["ball_x"] >= 95
+            and self.game_state["ball_y"] > (self.game_state["p2_y"] - 10)
+            and self.game_state["ball_y"] < (self.game_state["p2_y"] + 10 + 10)
+        ):
+            self.game_state["ball_dx"] *= -1 #Yatay yönü tersine çevir
+
+        # Topun skor yapma kontrolü (yatay sınırlara çarpma)
+        if self.game_state["ball_x"] <= 0:
+            self.game_state["p2_score"] += 1
+            self.game_state["ball_x"] = 50
+            self.game_state["ball_y"] = 50
+            self.game_state["ball_dx"] *= -1
+        elif self.game_state["ball_x"] >= 100:
+            self.game_state["p1_score"] += 1
+            self.game_state["ball_x"] = 50
+            self.game_state["ball_y"] = 50
+            self.game_state["ball_dx"] *= -1
+        await self.send_msg({
+            "type": "update_ball",
+            "ball_x": self.game_state["ball_x"],
+            "ball_y": self.game_state["ball_y"],
+            "p1_score": self.game_state["p1_score"],
+            "p2_score": self.game_state["p2_score"],
+             "ball_speed": self.game_state["ball_speed"],
+        })
 
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        self.game_state["isConnected"] = False
+        self.isConnected = False
         await self.endOfGame()
         
 
@@ -126,17 +163,17 @@ class GameConsumer(AsyncWebsocketConsumer):
                     direction = text_data_json["direction"]
                     if direction == "up":
                         if self.isHost and self.game_state["p1_y"] > 0 and self.game_state["p1_y"] <= 100:
-                            self.game_state["p1_y"] -= 2
+                            self.game_state["p1_y"] -= 1
                             await self.send_msg({"type": "move", "p1_y": self.game_state["p1_y"], "user_id": self.user_id})
                         elif not self.isHost and self.game_state["p2_y"] > 0 and self.game_state["p2_y"] <= 100:
-                            self.game_state["p2_y"] -= 2
+                            self.game_state["p2_y"] -= 1
                             await self.send_msg({"type": "move", "p2_y": self.game_state["p2_y"], "user_id": self.user_id})
                     elif direction == "down":
                         if self.isHost and self.game_state["p1_y"] >= 0 and self.game_state["p1_y"] < 100:
-                            self.game_state["p1_y"] += 2
+                            self.game_state["p1_y"] += 1
                             await self.send_msg({"type": "move", "p1_y": self.game_state["p1_y"], "user_id": self.user_id})
                         elif not self.isHost and self.game_state["p2_y"] >= 0 and self.game_state["p2_y"] < 100:
-                            self.game_state["p2_y"] += 2
+                            self.game_state["p2_y"] += 1
                             await self.send_msg({"type": "move", "p2_y": self.game_state["p2_y"], "user_id": self.user_id})
                     logger.error(f"p1_y ={self.game_state['p1_y']} p2_y {self.game_state['p2_y']}")
         except Exception as e:
@@ -157,13 +194,11 @@ class GameConsumer(AsyncWebsocketConsumer):
 
     async def endOfGame(self):
         try:
-            # Use sync_to_async to run synchronous database queries
             room = await sync_to_async(
                 TMPGameDB.objects.filter(room_id=self.room_id).first
             )()
 
             if room:
-                # Determine the remaining player
                 if self.user_id == room.player1_id:
                     remaining_player_id = room.player2_id
                 elif self.user_id == room.player2_id:
@@ -172,9 +207,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     logger.error(f"Kullanici {self.user_id} bu odada bulunamadi.")
                     return
 
-                # If there's a remaining player, mark them as the winner
                 if remaining_player_id:
-                    # Update TMPGameDB
                     room.winner_id = remaining_player_id
                     room.end_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     await sync_to_async(room.save)()
@@ -183,9 +216,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                     await sync_to_async(GameDB.objects.create)(
                         room_id=room.room_id,
                         player1_id=room.player1_id,
-                        player1_score=room.player1_score,
+                        player1_score=self.game_state["p1_score"],
                         player2_id=room.player2_id,
-                        player2_score=room.player2_score,
+                        player2_score=self.game_state["p2_score"],
                         winner_id=remaining_player_id,
                         create_date=room.create_date,
                         end_date=room.end_date,
