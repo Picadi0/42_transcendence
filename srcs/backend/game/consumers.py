@@ -17,9 +17,11 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.user_id = self.scope["url_route"]["kwargs"]["user_id"]
         self.group_name = self.room_id
 
-        # Kullaniciyi gruba ekle
+        # Kullaniciyi channel gruba ekle
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         userCanJoinRoom = False
+        self.startGame = False
+        sendStartBroadCast = False
         try:
             # Fetch all rooms and evaluate the QuerySet synchronously
             rooms = await sync_to_async(list)(TMPGameDB.objects.all())
@@ -35,6 +37,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                         userCanJoinRoom = True
                     else:
                         userCanJoinRoom = False
+                    if room.player1_id and room.player2_id:
+                        sendStartBroadCast = True
                     break
 
         except Exception as e:
@@ -44,21 +48,38 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         if userCanJoinRoom:
             await self.accept()
+            asyncio.create_task(self.update())
+            self.isConnected = True
             logger.error(f"{self.user_id} şu oyuna {self.room_id} katildi")
+            logger.error(f"Herkes hazir mi status {sendStartBroadCast}")
         else:
             logger.error(
                 f"error: {self.user_id} şu oyuna {self.room_id} katilamadi çünkü gameDb'de bulunamadi"
             )
             await self.close()
 
+
+    async def update(self):
+        while self.isConnected:
+            logger.error("Update Calisiyor")
+            if self.startGame == False:
+                rooms = await sync_to_async(list)(TMPGameDB.objects.all())
+                for room in rooms:
+                    if room.room_id == self.room_id:
+                        if room.player1_id and room.player2_id:
+                            self.startGame = True
+            await asyncio.sleep(1)
+
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        self.isConnected = False
         await self.endOfGame()
         
 
     # Gruptan gelen mesaji kullaniciya ilet
     async def receive(self, text_data):
+        logger.error("receive cagrildi")
         try:
             text_data_json = json.loads(text_data)
             if not hasattr(self, "p1_y"):
@@ -85,9 +106,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     )
-                elif type == "disconnect":
-                    await self.close()
-                elif type == "move":
+                elif type == "startGame":
+                    self.startGame = True
+                elif type == "move" and self.startGame:
                     direction = text_data_json["direction"]
                     if direction == "up":
                         if self.isHost and self.p1_y > 0 and self.p1_y <= 100:
