@@ -130,7 +130,7 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
         self.isConnected = False
-        await self.endOfGame()
+        #await self.endOfGame()
         
 
     # Gruptan gelen mesaji kullaniciya ilet
