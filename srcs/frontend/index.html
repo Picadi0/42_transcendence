@@ -158,6 +158,8 @@
                         'ArrowUp': false,
                         'ArrowDown': false
                     };
+                     this.maxScore = 10;
+                     this.gameEnded = false;
                 }
     
                 updatePaddles(p1, p2) {
@@ -214,6 +216,7 @@
                         this.updateBallPosition();
                         this.handleCollisions();
                         this.draw();
+                        this.checkGameEnd();
                     }
                     updateMultiplayer(p1, p2)
                     {
@@ -304,7 +307,16 @@
                 updateScoreDisplay(){
                     document.getElementById('scores').textContent = `P1: ${this.p1_score} | P2: ${this.p2_score}`;
                 }
-    
+                 checkGameEnd() {
+                        if (this.isSingleplayer && !this.gameEnded) {
+                            if (this.p1_score >= this.maxScore || this.p2_score >= this.maxScore) {
+                                this.gameEnded = true;
+                                this.stopGameLoop();
+                                document.getElementById('status').textContent = `Oyun Bitti! ${this.p1_score > this.p2_score ? 'P1 Kazandı' : 'P2 Kazandı'}`;
+                            }
+                        }
+                 }
+
                 draw() {
                     this.ctx.fillStyle = '#1a1a1a';
                     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
