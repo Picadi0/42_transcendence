@@ -16,6 +16,7 @@
             background-color: rgb(46, 49, 50);
             color: white;
             overflow: hidden;
+            position: relative; /* Eklenen: body'ye göre pozisyonlama için */
         }
         .form-container {
             display: flex;
@@ -25,14 +26,15 @@
             z-index: 2;
         }
         #gameContainer {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
             display: none;
+            width: 800px;
+            height: 600px;
+            position: relative;
+            margin: 0 auto;
         }
         #gameCanvas {
+            width: 100%;
+            height: 100%;
             background-color: #1a1a1a;
         }
         .button-container {
@@ -52,10 +54,14 @@
         button:hover {
             background-color: #bca220;
         }
-        #status {
-            margin-top: 20px;
+       #status {
+            position: absolute; /* Eklenen: mutlak konumlandırma */
+            top: 10px;       /* Eklenen: yukarıdan 10px mesafe */
+            left: 50%;      /* Eklenen: sola 50% */
+            transform: translateX(-50%); /* Eklenen: sola doğru kaydırma */
             font-size: 1.5em;
             z-index: 2;
+            text-align: center;
         }
         input {
             padding: 10px;
@@ -68,6 +74,8 @@
     </style>
 </head>
 <body>
+    <div id="status"></div>
+
     <div class="form-container">
         <input type="text" id="userIdInput" placeholder="Kullanıcı ID'nizi girin">
         <div class="button-container">
@@ -77,10 +85,9 @@
     </div>
     
     <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
     </div>
 
-    <div id="status"></div>
 
     <script>
         class PongGame {
@@ -91,14 +98,6 @@
                 this.paddleHeight = 100;
                 this.p1_y = 50; // Yüzde cinsinden pozisyon
                 this.p2_y = 50;
-                
-                this.resizeCanvas();
-                window.addEventListener('resize', () => this.resizeCanvas());
-            }
-
-            resizeCanvas() {
-                this.canvas.width = window.innerWidth;
-                this.canvas.height = window.innerHeight;
                 this.draw();
             }
 
