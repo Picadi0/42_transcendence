@@ -61,8 +61,8 @@ class GameConsumer(AsyncWebsocketConsumer):
 
     async def update(self):
         while self.isConnected:
-            logger.error("Update Calisiyor")
             if self.startGame == False:
+                logger.error("Update Calisiyor")
                 rooms = await sync_to_async(list)(TMPGameDB.objects.all())
                 for room in rooms:
                     if room.room_id == self.room_id:
@@ -70,7 +70,11 @@ class GameConsumer(AsyncWebsocketConsumer):
                             self.startGame = True
                 await asyncio.sleep(1)
             else:
-                await asyncio.sleep(1)#speed of ball
+                self.update_ball()
+                await asyncio.sleep(0.016)#60 fpsmişmiş
+
+    async def update_ball(self):
+        return
 
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
@@ -124,7 +128,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                         elif not self.isHost and self.p2_y >= 0 and self.p2_y < 100:
                             self.p2_y += 2
                             await self.send_msg({"type": "move", "p2_y": self.p2_y, "user_id": self.user_id})
-                    logger.error(f"p1_y ={self.p1_y} p2_y={self.p2_y}")
+                    if self.isHost:
+                        logger.error(f"p1_y ={self.p1_y}")
+                    else:
+                        logger.error(f"p2_y ={self.p2_y}")
         except Exception as e:
             logger.error(f"receive Error :{e}")
 
