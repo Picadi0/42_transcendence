@@ -57,9 +57,6 @@
             font-size: 1.5em;
             z-index: 2;
         }
-        .hidden {
-            display: none;
-        }
         input {
             padding: 10px;
             font-size: 1em;
@@ -67,11 +64,6 @@
             width: 200px;
             border-radius: 5px;
             border: 1px solid #ccc;
-        }
-        .test-ping-container {
-            display: flex;
-            gap: 20px;
-            margin-top: 20px;
         }
     </style>
 </head>
@@ -89,11 +81,6 @@
     </div>
 
     <div id="status"></div>
-    
-    <div class="test-ping-container">
-        <button id="testBtn" class="hidden">test</button>
-        <button id="pingBtn" class="hidden">ping</button>
-    </div>
 
     <script>
         class PongGame {
@@ -153,8 +140,6 @@
         let isHost = false;
         const hostBtn = document.getElementById('hostBtn');
         const joinBtn = document.getElementById('joinBtn');
-        const testBtn = document.getElementById('testBtn');
-        const pingBtn = document.getElementById('pingBtn');
         const statusDiv = document.getElementById('status');
         const userIdInput = document.getElementById('userIdInput');
         const gameContainer = document.getElementById('gameContainer');
@@ -169,14 +154,13 @@
                 console.log("WebSocket bağlantısı açıldı:", path);
                 gameContainer.style.display = 'block';
                 document.querySelector('.form-container').style.display = 'none';
-                testBtn.classList.remove('hidden');
-                pingBtn.classList.remove('hidden');
                 statusDiv.textContent = "Bağlandı - Oda: " + roomID;
                 
                 // Oyunu başlat
                 const canvas = document.getElementById('gameCanvas');
                 game = new PongGame(canvas);
                 setupKeyListeners();
+                setupScrollListener();
             };
 
             websocket.onmessage = (event) => {
@@ -201,20 +185,21 @@
                 console.error("WebSocket hatası:", error);
                 gameContainer.style.display = 'none';
                 document.querySelector('.form-container').style.display = 'flex';
-                testBtn.classList.add('hidden');
-                pingBtn.classList.add('hidden');
                 statusDiv.textContent = "Hata: " + error.message;
                 removeKeyListeners();
+                removeScrollListener();
             };
 
             websocket.onclose = () => {
                 console.log("WebSocket bağlantısı kapandı.");
                 gameContainer.style.display = 'none';
                 document.querySelector('.form-container').style.display = 'flex';
-                testBtn.classList.add('hidden');
-                pingBtn.classList.add('hidden');
-                statusDiv.textContent = "Bağlantı kapandı.";
+                if (!statusDiv.textContent.startsWith("Oyun sonlandı! Kazanan:"))
+                {
+                    statusDiv.textContent = "Bağlantı kapandı.";
+                }
                 removeKeyListeners();
+                removeScrollListener();
             };
         }
 
@@ -278,18 +263,6 @@
             }
         });
 
-        testBtn.addEventListener('click', () => {
-            if (websocket?.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({ iamMalformed: 'test' }));
-            }
-        });
-
-        pingBtn.addEventListener('click', () => {
-            if (websocket?.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({ "type": "ping" }));
-            }
-        });
-
         function setupKeyListeners() {
             document.addEventListener('keydown', handleKeyPress);
         }
@@ -298,12 +271,40 @@
             document.removeEventListener('keydown', handleKeyPress);
         }
 
+        function setupScrollListener() {
+            document.addEventListener('wheel', handleScroll);
+        }
+
+        function removeScrollListener() {
+            document.removeEventListener('wheel', handleScroll);
+        }
+
         function handleKeyPress(event) {
             if (websocket?.readyState === WebSocket.OPEN) {
                 let direction;
                 if (event.key === 'ArrowUp' || event.key.toLowerCase() === 'w') {
                     direction = 'up';
                 } else if (event.key === 'ArrowDown' || event.key.toLowerCase() === 's') {
+                    direction = 'down';
+                }
+
+                if (direction) {
+                    websocket.send(JSON.stringify({ 
+                        type: 'move', 
+                        direction: direction,
+                        user_id: userID,
+                        room_id: roomID
+                    }));
+                }
+            }
+        }
+
+        function handleScroll(event) {
+            if (websocket?.readyState === WebSocket.OPEN) {
+                let direction;
+                if (event.deltaY < 0) {
+                    direction = 'up';
+                } else if (event.deltaY > 0) {
                     direction = 'down';
                 }
 

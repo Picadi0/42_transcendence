@@ -68,7 +68,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                     if room.room_id == self.room_id:
                         if room.player1_id and room.player2_id:
                             self.startGame = True
-            await asyncio.sleep(1)
+                await asyncio.sleep(1)
+            else:
+                await asyncio.sleep(1)#speed of ball
 
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
@@ -106,8 +108,6 @@ class GameConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     )
-                elif type == "startGame":
-                    self.startGame = True
                 elif type == "move" and self.startGame:
                     direction = text_data_json["direction"]
                     if direction == "up":
