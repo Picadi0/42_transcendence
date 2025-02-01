@@ -9,18 +9,31 @@ from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
 
+# Global game state dictionary
+GAME_STATES = {}
 
 class GameConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        logger.error("Websocket bağlaniyor")
+        logger.error("Websocket bağlanıyor")
         self.room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.user_id = self.scope["url_route"]["kwargs"]["user_id"]
         self.group_name = self.room_id
 
+        # Initialize game state for this room if it doesn't exist
+        if self.room_id not in GAME_STATES:
+            GAME_STATES[self.room_id] = {
+                "p1_y": 50,
+                "p2_y": 50,
+                "startGame": False,
+                "isConnected": False,
+            }
+
+        self.game_state = GAME_STATES[self.room_id]
+        
+
         # Kullaniciyi channel gruba ekle
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         userCanJoinRoom = False
-        self.startGame = False
         sendStartBroadCast = False
         try:
             # Fetch all rooms and evaluate the QuerySet synchronously
@@ -49,7 +62,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         if userCanJoinRoom:
             await self.accept()
             asyncio.create_task(self.update())
-            self.isConnected = True
+            self.game_state["isConnected"] = True
             logger.error(f"{self.user_id} şu oyuna {self.room_id} katildi")
             logger.error(f"Herkes hazir mi status {sendStartBroadCast}")
         else:
@@ -60,14 +73,14 @@ class GameConsumer(AsyncWebsocketConsumer):
 
 
     async def update(self):
-        while self.isConnected:
-            if self.startGame == False:
+        while self.game_state["isConnected"]:
+            if self.game_state["startGame"] == False:
                 logger.error("Update Calisiyor")
                 rooms = await sync_to_async(list)(TMPGameDB.objects.all())
                 for room in rooms:
                     if room.room_id == self.room_id:
                         if room.player1_id and room.player2_id:
-                            self.startGame = True
+                            self.game_state["startGame"] = True
                 await asyncio.sleep(1)
             else:
                 self.update_ball()
@@ -79,7 +92,7 @@ class GameConsumer(AsyncWebsocketConsumer):
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        self.isConnected = False
+        self.game_state["isConnected"] = False
         await self.endOfGame()
         
 
@@ -88,10 +101,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         logger.error("receive cagrildi")
         try:
             text_data_json = json.loads(text_data)
-            if not hasattr(self, "p1_y"):
-                self.p1_y = 50
-            if not hasattr(self, "p2_y"):
-                self.p2_y = 50
+            
             if "type" not in text_data_json:
                 await self.send(
                     json.dumps(
@@ -112,26 +122,23 @@ class GameConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     )
-                elif type == "move" and self.startGame:
+                elif type == "move" and self.game_state["startGame"]:
                     direction = text_data_json["direction"]
                     if direction == "up":
-                        if self.isHost and self.p1_y > 0 and self.p1_y <= 100:
-                            self.p1_y -= 2
-                            await self.send_msg({"type": "move", "p1_y": self.p1_y, "user_id": self.user_id})
-                        elif not self.isHost and self.p2_y > 0 and self.p2_y <= 100:
-                            self.p2_y -= 2
-                            await self.send_msg({"type": "move", "p2_y": self.p2_y, "user_id": self.user_id})
+                        if self.isHost and self.game_state["p1_y"] > 0 and self.game_state["p1_y"] <= 100:
+                            self.game_state["p1_y"] -= 2
+                            await self.send_msg({"type": "move", "p1_y": self.game_state["p1_y"], "user_id": self.user_id})
+                        elif not self.isHost and self.game_state["p2_y"] > 0 and self.game_state["p2_y"] <= 100:
+                            self.game_state["p2_y"] -= 2
+                            await self.send_msg({"type": "move", "p2_y": self.game_state["p2_y"], "user_id": self.user_id})
                     elif direction == "down":
-                        if self.isHost and self.p1_y >= 0 and self.p1_y < 100:
-                            self.p1_y += 2
-                            await self.send_msg({"type": "move", "p1_y": self.p1_y, "user_id": self.user_id})
-                        elif not self.isHost and self.p2_y >= 0 and self.p2_y < 100:
-                            self.p2_y += 2
-                            await self.send_msg({"type": "move", "p2_y": self.p2_y, "user_id": self.user_id})
-                    if self.isHost:
-                        logger.error(f"p1_y ={self.p1_y}")
-                    else:
-                        logger.error(f"p2_y ={self.p2_y}")
+                        if self.isHost and self.game_state["p1_y"] >= 0 and self.game_state["p1_y"] < 100:
+                            self.game_state["p1_y"] += 2
+                            await self.send_msg({"type": "move", "p1_y": self.game_state["p1_y"], "user_id": self.user_id})
+                        elif not self.isHost and self.game_state["p2_y"] >= 0 and self.game_state["p2_y"] < 100:
+                            self.game_state["p2_y"] += 2
+                            await self.send_msg({"type": "move", "p2_y": self.game_state["p2_y"], "user_id": self.user_id})
+                    logger.error(f"p1_y ={self.game_state['p1_y']} p2_y {self.game_state['p2_y']}")
         except Exception as e:
             logger.error(f"receive Error :{e}")
 
