@@ -18,6 +18,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.user_id = self.scope["url_route"]["kwargs"]["user_id"]
         self.group_name = self.room_id
+        self.game_over = False  # Oyunun bu client için bitip bitmediği
 
         # Initialize game state for this room if it doesn't exist
         if self.room_id not in GAME_STATES:
@@ -26,16 +27,15 @@ class GameConsumer(AsyncWebsocketConsumer):
                 "p2_y": 50,
                 "ball_x": 50,
                 "ball_y": 50,
-                "ball_dx": 0.6,  # Topun yatay hızı
-                "ball_dy": 0.6,  # Topun dikey hızı
-                "ball_speed": 0.6, # Topun hız ayarı için değişken
+                "ball_dx": 0.8,  # Topun yatay hızı
+                "ball_dy": 0.8,  # Topun dikey hızı
+                "ball_speed": 0.8,  # Topun hız ayarı için değişken
                 "p1_score": 0,
                 "p2_score": 0,
                 "startGame": False,
+                "gameRunning": True  # Oyunun çalışıp çalışmadığını kontrol etmek için oda özelinde
             }
-        self.isConnected = False
         self.game_state = GAME_STATES[self.room_id]
-        
 
         # Kullaniciyi channel gruba ekle
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -63,7 +63,6 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         if userCanJoinRoom:
             await self.accept()
-            self.isConnected = True
             asyncio.create_task(self.update())
             logger.error(f"{self.user_id} şu oyuna {self.room_id} katildi")
         else:
@@ -72,15 +71,16 @@ class GameConsumer(AsyncWebsocketConsumer):
             )
             await self.close()
 
-
     async def update(self):
-        while self.isConnected:
+        while self.isHost and self.game_state["gameRunning"] and not self.game_over:
             if self.game_state['startGame']:
                 await self.update_ball()
-                await asyncio.sleep(0.016)#60 fpsmişmiş
+                await asyncio.sleep(0.016)
             else:
                 logger.error("oyun baslamasi bekleniyor")
                 await asyncio.sleep(1)
+        if self.game_over:
+            await self.endOfGame()
 
     async def update_ball(self):
         # Topun pozisyonunu güncelle
@@ -90,7 +90,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         # Topun canvas sınırlarına çarpma kontrolü
         if self.game_state["ball_y"] <= 0 or self.game_state["ball_y"] >= 100:
             self.game_state["ball_dy"] *= -1  # Dikey yönü tersine çevir
-        
+
         # Paddle'lara çarpma kontrolü
         if (
             self.game_state["ball_x"] <= 5
@@ -99,12 +99,12 @@ class GameConsumer(AsyncWebsocketConsumer):
         ):
             self.game_state["ball_dx"] *= -1  # Yatay yönü tersine çevir
 
-        if(
+        if (
             self.game_state["ball_x"] >= 95
             and self.game_state["ball_y"] > (self.game_state["p2_y"] - 10)
             and self.game_state["ball_y"] < (self.game_state["p2_y"] + 10 + 10)
         ):
-            self.game_state["ball_dx"] *= -1 #Yatay yönü tersine çevir
+            self.game_state["ball_dx"] *= -1  # Yatay yönü tersine çevir
 
         # Topun skor yapma kontrolü (yatay sınırlara çarpma)
         if self.game_state["ball_x"] <= 0:
@@ -117,28 +117,37 @@ class GameConsumer(AsyncWebsocketConsumer):
             self.game_state["ball_x"] = 50
             self.game_state["ball_y"] = 50
             self.game_state["ball_dx"] *= -1
+
+        # Skor kontrolü
+        if self.game_state["p1_score"] >= 10 or self.game_state["p2_score"] >= 10:
+            self.game_over = True
+            self.game_state["gameRunning"] = False
+            logger.error("OYUN BITTI")
+        
         await self.send_msg({
             "type": "update_ball",
             "ball_x": self.game_state["ball_x"],
             "ball_y": self.game_state["ball_y"],
             "p1_score": self.game_state["p1_score"],
             "p2_score": self.game_state["p2_score"],
-             "ball_speed": self.game_state["ball_speed"],
+            "ball_speed": self.game_state["ball_speed"],
         })
+        
+        if self.game_over:
+            await self.endOfGame()
+
 
     # Kullaniciyi gruptan çikar
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-        self.isConnected = False
-        #await self.endOfGame()
-        
+        # Removed endOfGame() call as it will be done in update
 
     # Gruptan gelen mesaji kullaniciya ilet
     async def receive(self, text_data):
         logger.error("receive cagrildi")
         try:
             text_data_json = json.loads(text_data)
-            
+
             if "type" not in text_data_json:
                 await self.send(
                     json.dumps(
@@ -199,16 +208,12 @@ class GameConsumer(AsyncWebsocketConsumer):
             )()
 
             if room:
-                if self.user_id == room.player1_id:
-                    remaining_player_id = room.player2_id
-                elif self.user_id == room.player2_id:
-                    remaining_player_id = room.player1_id
-                else:
-                    logger.error(f"Kullanici {self.user_id} bu odada bulunamadi.")
-                    return
-
-                if remaining_player_id:
-                    room.winner_id = remaining_player_id
+                if room.player1_id and room.player2_id:
+                    p1_win = self.game_state["p1_score"] > self.game_state["p2_score"]
+                    if p1_win:
+                        room.winner_id = room.player1_id
+                    else:
+                        room.winner_id = room.player2_id
                     room.end_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     await sync_to_async(room.save)()
 
@@ -219,25 +224,27 @@ class GameConsumer(AsyncWebsocketConsumer):
                         player1_score=self.game_state["p1_score"],
                         player2_id=room.player2_id,
                         player2_score=self.game_state["p2_score"],
-                        winner_id=remaining_player_id,
+                        winner_id=room.winner_id,
                         create_date=room.create_date,
                         end_date=room.end_date,
                     )
                     logger.error(f"{self.user_id} Oyun verileri kayit edildi.")
+                    if p1_win:
+                        logger.error(f"{room.winner_id} oyunu kazandi score {self.game_state['p1_score']} {self.game_state['p2_score']}")
+                    else:
+                        logger.error(f"{room.winner_id} oyunu kazandi score {self.game_state['p2_score']} {self.game_state['p1_score']}")
                     # Delete the room from TMPGameDB
                     logger.error(f"{room.room_id} oda silindi.")
+                    await self.send_msg({"type": "disconnect", "Winner": room.winner_id})
                     await sync_to_async(room.delete)()
-                    logger.error(
-                        f"Kullanici {self.user_id} odadan ayrildi. Kazanan: {remaining_player_id}"
-                    )
-                    await self.send_msg({"type": "disconnect", "Winner": remaining_player_id})
+                    self.game_over = True # Ensure game_over is set to True to prevent infinite loops
                 else:
-                    logger.error(
-                        f"Kullanici {self.user_id} odadan ayrildi, Kazanan olmadi çünkü rakip yoktu."
-                    )
-                    logger.error(f"{room.room_id} oda silindi.")
+                    logger.error(f"{room.room_id} oda silindi Kazanan olmadi.")
                     await sync_to_async(room.delete)()
+                    self.game_over = True # Ensure game_over is set to True to prevent infinite loops
             else:
-                logger.error(f"Websocket disconnect olurken {self.room_id} bulunamadi")
+                logger.error(f"Oda {self.room_id} bulunamadi disconnect oldun.")
+                self.game_over = True
+                await self.disconnect(1000)
         except Exception as e:
             logger.error(f"endOfGame metodunda hata: {e}")
