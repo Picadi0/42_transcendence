@@ -719,29 +719,62 @@
                 
             });
 
-             function createPlayerInputs(numberOfPlayers) {
-                 tournamentPlayersInputs.innerHTML = ''; // Clear previous inputs
+            function createPlayerInputs(numberOfPlayers) {
+            tournamentPlayersInputs.innerHTML = ''; // Önceki inputları temizle
+
+            for (let i = 0; i < numberOfPlayers; i++) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = `Oyuncu ${i + 1} Adı`;
+                input.id = `player${i + 1}`;
+                tournamentPlayersInputs.appendChild(input);
+            }
+
+            const startBtn = document.createElement("button");
+            startBtn.textContent = "Turnuva Başlat";
+            
+            startBtn.addEventListener("click", () => {
+                tournamentPlayers = [];
+                const tempNames = new Set();
+
                 for (let i = 0; i < numberOfPlayers; i++) {
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.placeholder = `Oyuncu ${i + 1} Adi`;
-                    input.id = `player${i + 1}`;
-                   tournamentPlayersInputs.appendChild(input);
+                    const playerInput = document.getElementById(`player${i + 1}`);
+                    const rawValue = playerInput.value;
+                    const trimmedValue = rawValue.trim();
+                    let name;
+
+                    // Boşluk kontrolü
+                    if (trimmedValue === "") {
+                        if (rawValue !== "") { // Sadece boşluk girilmişse
+                            alert("Lütfen geçerli bir isim girin!");
+                            playerInput.focus();
+                            return;
+                        } else { // Input tamamen boşsa
+                            name = `Oyuncu ${i + 1}`;
+                        }
+                    } else {
+                        name = trimmedValue;
+                    }
+
+                    // Benzersizlik kontrolü
+                    if (tempNames.has(name)) {
+                        alert("Tüm isimler benzersiz olmalıdır!");
+                        playerInput.focus();
+                        return;
+                    }
+
+                    tempNames.add(name);
+                    tournamentPlayers.push(name);
                 }
-                const startBtn = document.createElement("button");
-                  startBtn.textContent = "Turnuva Başlat";
-                  startBtn.addEventListener("click", () => {
-                      tournamentPlayers = [];
-                      for (let i = 0; i < numberOfPlayers; i++) {
-                         tournamentPlayers.push(document.getElementById(`player${i + 1}`).value || `Player ${i + 1}`);
-                     }
-                     tournamentPlayersInputs.style.display = 'none';
-                        gameContainer.style.display = 'block';
-                        startTournament();
-                   });
-                 tournamentPlayersInputs.appendChild(startBtn);
-                 tournamentPlayersInputs.style.display = 'flex';
-              }
+
+                tournamentPlayersInputs.style.display = 'none';
+                gameContainer.style.display = 'block';
+                startTournament();
+            });
+
+            tournamentPlayersInputs.appendChild(startBtn);
+            tournamentPlayersInputs.style.display = 'flex';
+        }
              function startTournament() {
                 oneVsOneBtn.style.display = 'none';
                 tournamentBtn.style.display = 'none';
