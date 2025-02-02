@@ -710,12 +710,13 @@
             }
             createPlayersBtn.addEventListener('click', () => {
                 const numberOfPlayers = parseInt(numberOfPlayersInput.value);
-                if (numberOfPlayers >= 2) {
+                if (numberOfPlayers >= 3 && numberOfPlayers <= 20) {
                    createPlayerInputs(numberOfPlayers);
                     tournamentInputContainer.style.display = 'none';
                 } else {
-                    alert("Oyuncu sayısı en az 2 olmalıdır.");
+                    alert("Oyuncu sayisi en az 3 maksimum 20 olmalidir.");
                 }
+                
             });
 
              function createPlayerInputs(numberOfPlayers) {
@@ -723,7 +724,7 @@
                 for (let i = 0; i < numberOfPlayers; i++) {
                     const input = document.createElement('input');
                     input.type = 'text';
-                    input.placeholder = `Oyuncu ${i + 1} Adı`;
+                    input.placeholder = `Oyuncu ${i + 1} Adi`;
                     input.id = `player${i + 1}`;
                    tournamentPlayersInputs.appendChild(input);
                 }
