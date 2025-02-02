@@ -56,6 +56,21 @@
             margin-bottom: 20px;
              z-index: 2;
         }
+         .tournament-input-container {
+             display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            z-index: 2;
+        }
+         .tournament-player-inputs{
+            display: none;
+             flex-direction: column;
+             align-items: center;
+             gap: 10px;
+            margin-bottom: 20px;
+        }
         button {
             padding: 15px 30px;
             font-size: 1.2em;
@@ -114,6 +129,12 @@
       <div class="singleplayer-mode-container" id="singleplayerModeContainer">
             <button id="oneVsOneBtn">1vs1</button>
             <button id="tournamentBtn">Tournament</button>
+             <div class="tournament-input-container" id="tournamentInputContainer">
+                <input type="number" id="numberOfPlayersInput" min="2" placeholder="Oyuncu Sayısı">
+                <button id="createPlayersBtn">Oyuncuları Oluştur</button>
+             </div>
+             <div class="tournament-player-inputs" id="tournamentPlayersInputs">
+                 </div>
       </div>
     
     <div class="form-container" id="multiplayerForm" style="display: none;">
@@ -251,7 +272,6 @@
                             this.ball_dy *= -1; // Reverse direction
                         }
 
-
                         //collision with left paddle
                         const p1Y = (this.canvas.height - this.paddleHeight) * (this.p1_y / 100);
                         if (
@@ -297,7 +317,6 @@
                     this.ball_dy = Math.random() > 0.5 ? 1 : -1;
                 }
 
-
                  updateBallPosition(){
                     const speedMultiplier = this.isSingleplayer ? 0.5 : 1;
                      this.ball_x += this.ball_dx * this.ball_speed * speedMultiplier;
@@ -312,7 +331,10 @@
                             if (this.p1_score >= this.maxScore || this.p2_score >= this.maxScore) {
                                 this.gameEnded = true;
                                 this.stopGameLoop();
-                                document.getElementById('status').textContent = `Oyun Bitti! ${this.p1_score > this.p2_score ? 'P1 Kazandı' : 'P2 Kazandı'}`;
+                                statusDiv.textContent = `Oyun Bitti! ${this.p1_score > this.p2_score ? 'P1 Kazandı' : 'P2 Kazandı'}`;
+                                if (isTournamentMode) {
+                                    handleTournamentMatchEnd(this.p1_score > this.p2_score ? currentP1Index : currentP2Index);
+                                }
                             }
                         }
                  }
@@ -360,12 +382,15 @@
     
             let game = null;
              let isMultiplayer = false;
+             let isTournamentMode = false;
             const hostBtn = document.getElementById('hostBtn');
             const joinBtn = document.getElementById('joinBtn');
              const multiplayerBtn = document.getElementById('multiplayerBtn');
              const singleplayerBtn = document.getElementById('singleplayerBtn');
              const oneVsOneBtn = document.getElementById('oneVsOneBtn');
             const tournamentBtn = document.getElementById('tournamentBtn');
+              const createPlayersBtn = document.getElementById('createPlayersBtn');
+             const numberOfPlayersInput = document.getElementById('numberOfPlayersInput');
             const statusDiv = document.getElementById('status');
             const userIdInput = document.getElementById('userIdInput');
             const gameContainer = document.getElementById('gameContainer');
@@ -374,11 +399,18 @@
              const gameModeContainer = document.getElementById('gameModeContainer');
              const backButtonContainer = document.getElementById('backButtonContainer');
              const singleplayerModeContainer = document.getElementById('singleplayerModeContainer');
+               const tournamentInputContainer = document.getElementById('tournamentInputContainer');
+             const tournamentPlayersInputs = document.getElementById('tournamentPlayersInputs');
               const backBtn = document.getElementById('backBtn');
            
             let websocket;
             let roomID;
             let userID;
+            
+             let tournamentPlayers = [];
+            let matchQueue = [];
+            let currentP1Index = 0;
+            let currentP2Index = 1;
     
             function connectWebSocket(path) {
                 websocket = new WebSocket('wss://' + window.location.host + path);
@@ -478,16 +510,21 @@
                  multiplayerForm.style.display = 'flex';
                  backButtonContainer.style.display = 'block';
                  singleplayerModeContainer.style.display = 'none';
+                 tournamentInputContainer.style.display = 'none';
+                  tournamentPlayersInputs.style.display = 'none';
             });
             
              singleplayerBtn.addEventListener('click', () => {
                  gameModeContainer.style.display = 'none';
                   singleplayerModeContainer.style.display = 'flex';
                  backButtonContainer.style.display = 'block';
+                  tournamentInputContainer.style.display = 'none';
+                  tournamentPlayersInputs.style.display = 'none';
             });
     
             oneVsOneBtn.addEventListener('click', () => {
                 isMultiplayer = false;
+                 isTournamentMode = false;
                 gameModeContainer.style.display = 'none';
                 singleplayerModeContainer.style.display = 'none';
                 gameContainer.style.display = 'block';
@@ -503,22 +540,20 @@
             });
 
              tournamentBtn.addEventListener('click', () => {
-                isMultiplayer = false;
+                 isMultiplayer = false;
+                 isTournamentMode = true;
                  gameModeContainer.style.display = 'none';
-                 singleplayerModeContainer.style.display = 'none';
-                gameContainer.style.display = 'block';
+                 singleplayerModeContainer.style.display = 'flex';
+                gameContainer.style.display = 'none';
                 backButtonContainer.style.display = 'block';
-                scoreDisplay.style.display = 'block';
-                statusDiv.textContent = "Tek oyunculu Turnuva Modu";
-                const canvas = document.getElementById('gameCanvas');
-                game = new PongGame(canvas);
-                game.isSingleplayer = true;
-                 game.startGameLoop();
-                setupScrollListener();
-                setupKeyListeners();
+                tournamentInputContainer.style.display = 'flex';
+                 tournamentPlayersInputs.style.display = 'none';
+                 scoreDisplay.style.display = 'block';
             });
     
              backBtn.addEventListener('click', () =>{
+                oneVsOneBtn.style.display = 'block'; // Eklenen satır
+                tournamentBtn.style.display = 'block'; // Eklenen satır
                   gameContainer.style.display = 'none';
                  multiplayerForm.style.display = 'none';
                  gameModeContainer.style.display = 'flex';
@@ -536,6 +571,9 @@
                         websocket.close();
                         isMultiplayer = false;
                     }
+                    isTournamentMode = false;
+                     tournamentInputContainer.style.display = 'none';
+                      tournamentPlayersInputs.style.display = 'none';
             });
             
             hostBtn.addEventListener('click', async () => {
@@ -670,6 +708,114 @@
                     }
                 }
             }
+            createPlayersBtn.addEventListener('click', () => {
+                const numberOfPlayers = parseInt(numberOfPlayersInput.value);
+                if (numberOfPlayers >= 2) {
+                   createPlayerInputs(numberOfPlayers);
+                    tournamentInputContainer.style.display = 'none';
+                } else {
+                    alert("Oyuncu sayısı en az 2 olmalıdır.");
+                }
+            });
+
+             function createPlayerInputs(numberOfPlayers) {
+                 tournamentPlayersInputs.innerHTML = ''; // Clear previous inputs
+                for (let i = 0; i < numberOfPlayers; i++) {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.placeholder = `Oyuncu ${i + 1} Adı`;
+                    input.id = `player${i + 1}`;
+                   tournamentPlayersInputs.appendChild(input);
+                }
+                const startBtn = document.createElement("button");
+                  startBtn.textContent = "Turnuva Başlat";
+                  startBtn.addEventListener("click", () => {
+                      tournamentPlayers = [];
+                      for (let i = 0; i < numberOfPlayers; i++) {
+                         tournamentPlayers.push(document.getElementById(`player${i + 1}`).value || `Player ${i + 1}`);
+                     }
+                     tournamentPlayersInputs.style.display = 'none';
+                        gameContainer.style.display = 'block';
+                        startTournament();
+                   });
+                 tournamentPlayersInputs.appendChild(startBtn);
+                 tournamentPlayersInputs.style.display = 'flex';
+              }
+             function startTournament() {
+                oneVsOneBtn.style.display = 'none';
+                tournamentBtn.style.display = 'none';
+                  matchQueue = [];
+                 //Create all combinations of players
+                for(let i=0; i < tournamentPlayers.length; i++)
+                {
+                    for(let j = i + 1; j < tournamentPlayers.length; j++)
+                    {
+                        matchQueue.push({p1: i, p2: j});
+                    }
+                }
+                //shuffle the match queue
+                for (let i = matchQueue.length - 1; i > 0; i--) {
+                     const j = Math.floor(Math.random() * (i + 1));
+                    [matchQueue[i], matchQueue[j]] = [matchQueue[j], matchQueue[i]];
+                }
+                currentP1Index = matchQueue[0].p1;
+                currentP2Index = matchQueue[0].p2;
+                statusDiv.textContent = `${tournamentPlayers[currentP1Index]} vs ${tournamentPlayers[currentP2Index]}`;
+                const canvas = document.getElementById('gameCanvas');
+                 setupKeyListeners();
+                setupScrollListener();
+                game = new PongGame(canvas);
+                game.isSingleplayer = true;
+                game.startGameLoop();
+                 game.gameEnded = false;
+                game.resetBall();
+                game.p1_score = 0;
+                game.p2_score = 0;
+                game.updateScoreDisplay();
+             }
+
+              function handleTournamentMatchEnd(winnerIndex) {
+                 const loserIndex = winnerIndex === currentP1Index ? currentP2Index : currentP1Index;
+                 // Remove the loser from the tournamentPlayers array
+                 tournamentPlayers.splice(loserIndex, 1);
+
+                 // Update the matchQueue to remove matches involving the loser
+                matchQueue = matchQueue.filter(match => match.p1 !== loserIndex && match.p2 !== loserIndex);
+                //Adjust the indexes in matchQueue
+                 for (let i = 0; i < matchQueue.length; i++) {
+                       if (matchQueue[i].p1 > loserIndex) {
+                           matchQueue[i].p1--;
+                      }
+                       if (matchQueue[i].p2 > loserIndex) {
+                         matchQueue[i].p2--;
+                     }
+                 }
+                 // If there's only one player left, they are the winner
+                if (tournamentPlayers.length === 1) {
+                     statusDiv.textContent = `Turnuva Bitti! Kazanan: ${tournamentPlayers[0]}`;
+                      removeKeyListeners();
+                     removeScrollListener();
+                    game.stopGameLoop();
+                    game = null;
+                    return;
+                  }
+                if (matchQueue.length > 0) {
+                     currentP1Index = matchQueue[0].p1;
+                    currentP2Index = matchQueue[0].p2;
+                    statusDiv.textContent = `${tournamentPlayers[currentP1Index]} vs ${tournamentPlayers[currentP2Index]}`;
+                     game.startGameLoop();
+                    game.gameEnded = false;
+                    game.resetBall();
+                     game.p1_score = 0;
+                     game.p2_score = 0;
+                     game.updateScoreDisplay();
+                     matchQueue.shift();
+                } else {
+                    // If the queue is empty but more than one player remains, start a new round
+                    startTournament();
+                }
+             }
+
         </script>
 </body>
 </html>
