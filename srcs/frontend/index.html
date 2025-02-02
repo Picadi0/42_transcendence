@@ -121,14 +121,14 @@
 <body>
     <div id="status"></div>
     <div id="scores">P1: 0 | P2: 0</div>
-    
+
     <div class="game-mode-container" id="gameModeContainer">
         <button id="singleplayerBtn">Singleplayer</button>
         <button id="multiplayerBtn">Multiplayer</button>
     </div>
       <div class="singleplayer-mode-container" id="singleplayerModeContainer">
             <button id="oneVsOneBtn">1vs1</button>
-            <button id="tournamentBtn">Tournament</button>
+            <button id="fourPlayerBtn">4 Player</button> <button id="tournamentBtn">Tournament</button>
              <div class="tournament-input-container" id="tournamentInputContainer">
                 <input type="number" id="numberOfPlayersInput" min="2" placeholder="Oyuncu Sayısı">
                 <button id="createPlayersBtn">Oyuncuları Oluştur</button>
@@ -136,7 +136,7 @@
              <div class="tournament-player-inputs" id="tournamentPlayersInputs">
                  </div>
       </div>
-    
+
     <div class="form-container" id="multiplayerForm" style="display: none;">
         <input type="text" id="userIdInput" placeholder="Kullanıcı ID'nizi girin">
         <div class="button-container">
@@ -144,11 +144,11 @@
             <button id="joinBtn">Join</button>
         </div>
     </div>
-    
+
      <div class="back-button-container" id="backButtonContainer">
         <button id="backBtn">Geri</button>
      </div>
-    
+
     <div id="gameContainer">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
     </div>
@@ -159,31 +159,44 @@
                     this.ctx = canvas.getContext('2d');
                     this.paddleWidth = 30;
                     this.paddleHeight = 100;
-                    this.p1_y = 50;
-                    this.p2_y = 50;
+                    this.paddleTopWidth = 100;
+                    this.paddleTopHeight = 30;
+                    this.p1_y = 50; // Left Paddle (Magenta)
+                    this.p2_y = 50; // Right Paddle (Cyan)
+                    this.p3_x = 50; // Top Paddle (Yellow)
+                    this.p4_x = 50; // Bottom Paddle (Lime)
                     this.ball_x = 50;
                     this.ball_y = 50;
-                    this.p1_score = 0;
-                    this.p2_score = 0;
+                    this.p1_score = 0; // Left Score
+                    this.p2_score = 0; // Right Score
+                    this.p3_score = 0; // Top Score
+                    this.p4_score = 0; // Bottom Score
                     this.ball_speed = 1;
                     this.isSingleplayer = false;
+                    this.isFourPlayer = false;
                      this.ball_dx = 1; // Ball direction in x-axis (-1 for left, 1 for right)
                     this.ball_dy = 1; // Ball direction in y-axis (-1 for up, 1 for down)
                     this.draw();
                      this.gameLoop = null;
-                     this.p1_targetY = this.p1_y; // Target Y for smooth movement
-                     this.p2_targetY = this.p2_y;  // Target Y for smooth movement
+                     this.p1_targetY = this.p1_y; // Target Y for smooth movement (Left)
+                     this.p2_targetY = this.p2_y;  // Target Y for smooth movement (Right)
+                     this.p3_targetX = this.p3_x; // Target X for smooth movement (Top)
+                     this.p4_targetX = this.p4_x; // Target X for smooth movement (Bottom)
                      this.keys = {
-                        'w': false,
-                        's': false,
-                        'ArrowUp': false,
-                        'ArrowDown': false
+                        'w': false, // P1 Up (Left Paddle)
+                        's': false, // P1 Down (Left Paddle)
+                        'ArrowUp': false, // P2 Up (Right Paddle)
+                        'ArrowDown': false, // P2 Down (Right Paddle)
+                        'v': false, // P3 Left (Top Paddle) - Changed from 'a' to 'v'
+                        'b': false, // P3 Right (Top Paddle) - Changed from 'd' to 'b'
+                        'j': false, // P4 Left (Bottom Paddle)
+                        'l': false  // P4 Right (Bottom Paddle)
                     };
                      this.maxScore = 10;
                      this.gameEnded = false;
                 }
-    
-                updatePaddles(p1, p2) {
+
+                updatePaddles(p1, p2, p3, p4) {
                      const canvasHeight = this.canvas.height;
                        const paddleHeight = this.paddleHeight;
                        const speedMultiplier = 2.5; // Paddle speed multiplier
@@ -193,6 +206,12 @@
                     if(p2 !== undefined){
                          this.p2_targetY = Math.max(0, Math.min(100, p2));
                       }
+                     if(p3 !== undefined){
+                         this.p3_targetX = Math.max(0, Math.min(100, p3));
+                     }
+                     if(p4 !== undefined){
+                         this.p4_targetX = Math.max(0, Math.min(100, p4));
+                     }
                 }
                   updatePaddlePositions(){
                       const speed = 0.2; // Smoothing speed for paddles
@@ -210,27 +229,57 @@
                                  this.p2_y = this.p2_targetY;
                                 }
                         }
+                         if(this.p3_x !== this.p3_targetX)
+                        {
+                            this.p3_x += (this.p3_targetX - this.p3_x) * speed;
+                             if (Math.abs(this.p3_targetX - this.p3_x) < 0.1) {
+                                 this.p3_x = this.p3_targetX;
+                                }
+                        }
+                         if(this.p4_x !== this.p4_targetX)
+                        {
+                            this.p4_x += (this.p4_targetX - this.p4_x) * speed;
+                             if (Math.abs(this.p4_targetX - this.p4_x) < 0.1) {
+                                 this.p4_x = this.p4_targetX;
+                                }
+                        }
                 }
              movePaddles(){
                 const speedMultiplier = 2.5; // Paddle speed multiplier
-                 if(this.keys['w'])
+                 if(this.keys['w']) // P1 Up
                     {
-                       this.updatePaddles(this.p1_targetY - 2 * speedMultiplier, undefined);
+                       this.updatePaddles(this.p1_targetY - 2 * speedMultiplier, undefined, undefined, undefined);
                     }
-                   if(this.keys['s'])
+                   if(this.keys['s']) // P1 Down
                     {
-                       this.updatePaddles(this.p1_targetY + 2* speedMultiplier, undefined);
+                       this.updatePaddles(this.p1_targetY + 2* speedMultiplier, undefined, undefined, undefined);
                     }
-                   if(this.keys['ArrowUp'])
+                   if(this.keys['ArrowUp']) // P2 Up
                     {
-                         this.updatePaddles(undefined, this.p2_targetY - 2* speedMultiplier);
+                         this.updatePaddles(undefined, this.p2_targetY - 2* speedMultiplier, undefined, undefined);
                     }
-                     if(this.keys['ArrowDown'])
+                     if(this.keys['ArrowDown']) // P2 Down
                     {
-                        this.updatePaddles(undefined, this.p2_targetY + 2* speedMultiplier);
+                        this.updatePaddles(undefined, this.p2_targetY + 2* speedMultiplier, undefined, undefined);
+                    }
+                    if(this.keys['v']) // P3 Left - Changed from 'a' to 'v'
+                    {
+                        this.updatePaddles(undefined, undefined, this.p3_targetX - 2 * speedMultiplier, undefined);
+                    }
+                    if(this.keys['b']) // P3 Right - Changed from 'd' to 'b'
+                    {
+                        this.updatePaddles(undefined, undefined, this.p3_targetX + 2 * speedMultiplier, undefined);
+                    }
+                    if(this.keys['j']) // P4 Left
+                    {
+                        this.updatePaddles(undefined, undefined, undefined, this.p4_targetX - 2 * speedMultiplier);
+                    }
+                    if(this.keys['l']) // P4 Right
+                    {
+                        this.updatePaddles(undefined, undefined, undefined, this.p4_targetX + 2 * speedMultiplier);
                     }
             }
-    
+
                  updateSingleplayer() {
                          this.movePaddles();
                         this.updatePaddlePositions();
@@ -267,12 +316,12 @@
                       const ballX = this.canvas.width * (this.ball_x / 100);
                       const ballY = this.canvas.height * (this.ball_y / 100);
 
-                    // Collision with top and bottom walls
+                    // Collision with top and bottom walls (now just bounce in 4 player mode)
                         if (ballY + 10 > this.canvas.height || ballY - 10 < 0) {
-                            this.ball_dy *= -1; // Reverse direction
+                            this.ball_dy *= -1; // Reverse direction for top and bottom walls in both modes
                         }
 
-                        //collision with left paddle
+                        // Collision with left paddle (P1)
                         const p1Y = (this.canvas.height - this.paddleHeight) * (this.p1_y / 100);
                         if (
                             ballX - 10 <= 20 + this.paddleWidth &&
@@ -285,7 +334,7 @@
                            this.ball_dx = Math.abs(this.ball_dx); // Ensure that the ball goes to the right.
                         }
 
-                       //collision with right paddle
+                       // Collision with right paddle (P2)
                        const p2Y = (this.canvas.height - this.paddleHeight) * (this.p2_y / 100);
                             if (
                             ballX + 10 >= this.canvas.width - 20 - this.paddleWidth &&
@@ -298,13 +347,60 @@
                            this.ball_dx = - Math.abs(this.ball_dx); //Ensure that the ball goes to the left.
                         }
 
-                         // Ball scoring
-                        if (ballX < 0) {
-                            this.p2_score++;
-                             this.resetBall();
-                        } else if (ballX > this.canvas.width) {
-                            this.p1_score++;
-                            this.resetBall();
+                        // Collision with top paddle (P3)
+                        const p3X = (this.canvas.width - this.paddleTopWidth) * (this.p3_x / 100);
+                        const p3Y = 20;
+                        if (this.isFourPlayer &&
+                            ballY - 10 <= p3Y + this.paddleTopHeight &&
+                            ballX + 10 >= p3X &&
+                            ballX - 10 <= p3X + this.paddleTopWidth &&
+                            this.ball_dy < 0) {
+                            this.ball_dy *= -1;
+                            this.ball_speed *= 1.1;
+                            this.ball_dy = Math.abs(this.ball_dy);
+                        }
+
+                        // Collision with bottom paddle (P4)
+                        const p4X = (this.canvas.width - this.paddleTopWidth) * (this.p4_x / 100);
+                        const p4Y = this.canvas.height - 20 - this.paddleTopHeight;
+                        if (this.isFourPlayer &&
+                            ballY + 10 >= p4Y &&
+                            ballX + 10 >= p4X &&
+                            ballX - 10 <= p4X + this.paddleTopWidth &&
+                            this.ball_dy > 0) {
+                            this.ball_dy *= -1;
+                            this.ball_speed *= 1.1;
+                            this.ball_dy = -Math.abs(this.ball_dy);
+                        }
+
+
+                         // Ball scoring for 2 player mode (left and right walls)
+                        if (!this.isFourPlayer) {
+                            if (ballX < 0) {
+                                this.p2_score++;
+                                 this.resetBall();
+                            } else if (ballX > this.canvas.width) {
+                                this.p1_score++;
+                                this.resetBall();
+                            }
+                        } else {
+                            // Ball scoring for 4 player mode (corners)
+                            const cornerScoreRange = 150; // Define the range for corner scoring in pixels from top/bottom
+                            if (ballX < 0) {
+                                if (ballY < cornerScoreRange || ballY > this.canvas.height - cornerScoreRange) {
+                                    this.p2_score++; // Right player scores on left corners
+                                    this.resetBall();
+                                } else {
+                                    this.ball_dx *= -1; // Bounce off left wall if not in corner score zone
+                                }
+                            } else if (ballX > this.canvas.width) {
+                                if (ballY < cornerScoreRange || ballY > this.canvas.height - cornerScoreRange) {
+                                    this.p1_score++; // Left player scores on right corners
+                                    this.resetBall();
+                                } else {
+                                    this.ball_dx *= -1; // Bounce off right wall if not in corner score zone
+                                }
+                            }
                         }
                        this.updateScoreDisplay();
                 }
@@ -324,14 +420,25 @@
                 }
 
                 updateScoreDisplay(){
-                    document.getElementById('scores').textContent = `P1: ${this.p1_score} | P2: ${this.p2_score}`;
+                    if (!this.isFourPlayer) {
+                        document.getElementById('scores').textContent = `P1: ${this.p1_score} | P2: ${this.p2_score}`;
+                    } else {
+                        document.getElementById('scores').textContent = `Sol Köşe: ${this.p1_score} | Sağ Köşe: ${this.p2_score}`;
+                    }
                 }
                  checkGameEnd() {
                         if (this.isSingleplayer && !this.gameEnded) {
-                            if (this.p1_score >= this.maxScore || this.p2_score >= this.maxScore) {
+                            if (this.p1_score >= this.maxScore || this.p2_score >= this.maxScore || (this.isFourPlayer && (this.p1_score >= this.maxScore || this.p2_score >= this.maxScore))) {
                                 this.gameEnded = true;
                                 this.stopGameLoop();
-                                statusDiv.textContent = `Oyun Bitti! ${this.p1_score > this.p2_score ? 'P1 Kazandı' : 'P2 Kazandı'}`;
+                                let winnerText = "Oyun Bitti! ";
+                                if (!this.isFourPlayer) {
+                                    winnerText += `${this.p1_score > this.p2_score ? 'P1 Kazandı' : 'P2 Kazandı'}`;
+                                } else {
+                                    winnerText += `${this.p1_score > this.p2_score ? 'Sol Köşe Kazandı' : 'Sağ Köşe Kazandı'}`;
+                                }
+
+                                statusDiv.textContent = winnerText;
                                 if (isTournamentMode) {
                                     handleTournamentMatchEnd(this.p1_score > this.p2_score ? currentP1Index : currentP2Index);
                                 }
@@ -342,17 +449,19 @@
                 draw() {
                     this.ctx.fillStyle = '#1a1a1a';
                     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
+
+                    // Left Paddle (P1)
                     this.ctx.fillStyle = 'magenta';
                     const p1Y = (this.canvas.height - this.paddleHeight) * (this.p1_y / 100);
                     this.ctx.fillRect(
-                        20, 
+                        20,
                         p1Y,
                         this.paddleWidth,
                         this.paddleHeight
                     );
-    
-                     this.ctx.fillStyle = 'cyan';
+
+                     // Right Paddle (P2)
+                    this.ctx.fillStyle = 'cyan';
                     const p2Y = (this.canvas.height - this.paddleHeight) * (this.p2_y / 100);
                     this.ctx.fillRect(
                         this.canvas.width - 20 - this.paddleWidth,
@@ -360,7 +469,30 @@
                         this.paddleWidth,
                         this.paddleHeight
                     );
-    
+
+                    if (this.isFourPlayer) {
+                        // Top Paddle (P3) - Yellow
+                        this.ctx.fillStyle = 'yellow';
+                        const p3X = (this.canvas.width - this.paddleTopWidth) * (this.p3_x / 100);
+                        this.ctx.fillRect(
+                            p3X,
+                            20,
+                            this.paddleTopWidth,
+                            this.paddleTopHeight
+                        );
+
+                        // Bottom Paddle (P4) - Lime
+                        this.ctx.fillStyle = 'lime';
+                        const p4X = (this.canvas.width - this.paddleTopWidth) * (this.p4_x / 100);
+                        this.ctx.fillRect(
+                            p4X,
+                            this.canvas.height - 20 - this.paddleTopHeight,
+                            this.paddleTopWidth,
+                            this.paddleTopHeight
+                        );
+                    }
+
+                    // Ball
                     this.ctx.beginPath();
                     const ballX = this.canvas.width * (this.ball_x / 100);
                     const ballY = this.canvas.height * (this.ball_y / 100);
@@ -379,7 +511,7 @@
                         clearInterval(this.gameLoop);
                     }
             }
-    
+
             let game = null;
              let isMultiplayer = false;
              let isTournamentMode = false;
@@ -388,6 +520,7 @@
              const multiplayerBtn = document.getElementById('multiplayerBtn');
              const singleplayerBtn = document.getElementById('singleplayerBtn');
              const oneVsOneBtn = document.getElementById('oneVsOneBtn');
+            const fourPlayerBtn = document.getElementById('fourPlayerBtn'); // New button
             const tournamentBtn = document.getElementById('tournamentBtn');
               const createPlayersBtn = document.getElementById('createPlayersBtn');
              const numberOfPlayersInput = document.getElementById('numberOfPlayersInput');
@@ -402,19 +535,19 @@
                const tournamentInputContainer = document.getElementById('tournamentInputContainer');
              const tournamentPlayersInputs = document.getElementById('tournamentPlayersInputs');
               const backBtn = document.getElementById('backBtn');
-           
+
             let websocket;
             let roomID;
             let userID;
-            
+
              let tournamentPlayers = [];
             let matchQueue = [];
             let currentP1Index = 0;
             let currentP2Index = 1;
-    
+
             function connectWebSocket(path) {
                 websocket = new WebSocket('wss://' + window.location.host + path);
-                
+
                 websocket.onopen = () => {
                     console.log("WebSocket bağlantısı açıldı:", path);
                     gameContainer.style.display = 'block';
@@ -424,17 +557,17 @@
                      backButtonContainer.style.display = 'block';
                     statusDiv.textContent = "Bağlandı - Oda: " + roomID;
                     scoreDisplay.style.display = 'block';
-                    
+
                     const canvas = document.getElementById('gameCanvas');
                     game = new PongGame(canvas);
                     setupKeyListeners();
                     setupScrollListener();
                 };
-    
+
                 websocket.onmessage = (event) => {
                     const data = JSON.parse(event.data);
                     console.log("Gelen mesaj:", data);
-                    
+
                     if(data.type === 'move') {
                         if(game) {
                             game.updateMultiplayer(data.p1_y, data.p2_y);
@@ -453,10 +586,10 @@
                         websocket.close();
                         statusDiv.textContent = `Oyun sonlandı! Kazanan: ${data.Winner}`;
                         scoreDisplay.style.display = 'none';
-    
-                    } 
+
+                    }
                 };
-    
+
                 websocket.onerror = (error) => {
                     console.error("WebSocket hatası:", error);
                     gameContainer.style.display = 'none';
@@ -469,7 +602,7 @@
                     removeScrollListener();
                     scoreDisplay.style.display = 'none';
                 };
-    
+
                 websocket.onclose = () => {
                     console.log("WebSocket bağlantısı kapandı.");
                     gameContainer.style.display = 'none';
@@ -484,10 +617,10 @@
                     removeKeyListeners();
                     removeScrollListener();
                     scoreDisplay.style.display = 'none';
-    
+
                 };
             }
-    
+
             async function sendPostRequest(url, data) {
                 try {
                     const response = await fetch(url, {
@@ -503,7 +636,7 @@
                     return { status: "error", message: "İstek gönderilirken bir hata oluştu." };
                 }
             }
-    
+
              multiplayerBtn.addEventListener('click', () => {
                  isMultiplayer = true;
                 gameModeContainer.style.display = 'none';
@@ -513,7 +646,7 @@
                  tournamentInputContainer.style.display = 'none';
                   tournamentPlayersInputs.style.display = 'none';
             });
-            
+
              singleplayerBtn.addEventListener('click', () => {
                  gameModeContainer.style.display = 'none';
                   singleplayerModeContainer.style.display = 'flex';
@@ -521,7 +654,7 @@
                   tournamentInputContainer.style.display = 'none';
                   tournamentPlayersInputs.style.display = 'none';
             });
-    
+
             oneVsOneBtn.addEventListener('click', () => {
                 isMultiplayer = false;
                  isTournamentMode = false;
@@ -539,6 +672,24 @@
                 setupKeyListeners();
             });
 
+            fourPlayerBtn.addEventListener('click', () => {
+                isMultiplayer = false;
+                isTournamentMode = false;
+                gameModeContainer.style.display = 'none';
+                singleplayerModeContainer.style.display = 'none';
+                gameContainer.style.display = 'block';
+                backButtonContainer.style.display = 'block';
+                scoreDisplay.style.display = 'block';
+                statusDiv.textContent = "Tek oyunculu 4 Player Modu";
+                const canvas = document.getElementById('gameCanvas');
+                game = new PongGame(canvas);
+                game.isSingleplayer = true;
+                game.isFourPlayer = true; // Enable 4 player mode
+                game.startGameLoop();
+                setupScrollListener();
+                setupKeyListeners();
+            });
+
              tournamentBtn.addEventListener('click', () => {
                  isMultiplayer = false;
                  isTournamentMode = true;
@@ -550,9 +701,10 @@
                  tournamentPlayersInputs.style.display = 'none';
                  scoreDisplay.style.display = 'block';
             });
-    
+
              backBtn.addEventListener('click', () =>{
                 oneVsOneBtn.style.display = 'block'; // Eklenen satır
+                fourPlayerBtn.style.display = 'block'; // Eklenen satır
                 tournamentBtn.style.display = 'block'; // Eklenen satır
                   gameContainer.style.display = 'none';
                  multiplayerForm.style.display = 'none';
@@ -575,74 +727,74 @@
                      tournamentInputContainer.style.display = 'none';
                       tournamentPlayersInputs.style.display = 'none';
             });
-            
+
             hostBtn.addEventListener('click', async () => {
                 userID = userIdInput.value.trim();
                 if (!userID) {
                     alert("Lütfen bir Kullanıcı ID girin.");
                     return;
                 }
-    
+
                 const response = await sendPostRequest(`https://${window.location.host}/game/host/`, { user_id: userID });
-    
+
                 if (response.status === "success") {
                     roomID = response.room_id;
-                   
+
                      connectWebSocket('/ws/pong/' + roomID + '/' + userID);
                 } else {
                     statusDiv.textContent = "Hata: " + (response.message || "Bilinmeyen hata");
                 }
             });
-    
+
             joinBtn.addEventListener('click', async () => {
                 userID = userIdInput.value.trim();
                 if (!userID) {
                     alert("Lütfen bir Kullanıcı ID girin.");
                     return;
                 }
-    
+
                 const joinRoomID = prompt("Oda ID'sini girin:");
                 if (!joinRoomID) {
                     alert("Lütfen bir Oda ID girin.");
                     return;
                 }
-    
-                const response = await sendPostRequest(`https://${window.location.host}/game/join/`, { 
-                    user_id: userID, 
-                    room_id: joinRoomID 
+
+                const response = await sendPostRequest(`https://${window.location.host}/game/join/`, {
+                    user_id: userID,
+                    room_id: joinRoomID
                 });
-    
+
                 if (response.status === "success") {
-                   
+
                     if (response.room_id != null)
                     {
                         roomID =response.room_id;
                     }
                     connectWebSocket('/ws/pong/' + roomID + '/' + userID);
-    
+
                 } else {
                     statusDiv.textContent = "Hata: " + (response.message || "Bilinmeyen hata");
                 }
             });
-    
+
            function setupKeyListeners() {
                  document.addEventListener('keydown', handleKeyDown);
                 document.addEventListener('keyup', handleKeyUp);
             }
-    
+
             function removeKeyListeners() {
                 document.removeEventListener('keydown', handleKeyDown);
                  document.removeEventListener('keyup', handleKeyUp);
             }
-    
+
             function setupScrollListener() {
                 document.addEventListener('wheel', handleScroll);
             }
-    
+
             function removeScrollListener() {
                 document.removeEventListener('wheel', handleScroll);
             }
-    
+
            function handleKeyDown(event) {
             if(game?.isSingleplayer === true) {
                 const key = event.key;
@@ -657,7 +809,7 @@
                     } else if (event.key === 'ArrowDown' || event.key.toLowerCase() === 's') {
                         direction = 'down';
                     }
-    
+
                     if (direction) {
                         for (let i = 0; i < 10; i++) {
                              websocket.send(JSON.stringify({
@@ -697,7 +849,7 @@
                     } else if (event.deltaY > 0) {
                         direction = 'down';
                     }
-    
+
                     if (direction) {
                        for (let i = 0; i < 10; i++) {
                             websocket.send(JSON.stringify({
@@ -716,7 +868,7 @@
                 } else {
                     alert("Oyuncu sayisi en az 3 maksimum 20 olmalidir.");
                 }
-                
+
             });
 
             function createPlayerInputs(numberOfPlayers) {
@@ -732,7 +884,7 @@
 
             const startBtn = document.createElement("button");
             startBtn.textContent = "Turnuva Başlat";
-            
+
             startBtn.addEventListener("click", () => {
                 tournamentPlayers = [];
                 const tempNames = new Set();
@@ -777,6 +929,7 @@
         }
              function startTournament() {
                 oneVsOneBtn.style.display = 'none';
+                fourPlayerBtn.style.display = 'none';
                 tournamentBtn.style.display = 'none';
                   matchQueue = [];
                  //Create all combinations of players
