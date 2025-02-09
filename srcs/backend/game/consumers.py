@@ -154,7 +154,6 @@ class GameConsumer(AsyncWebsocketConsumer):
             if self.room_id in GAME_TASKS:
                 GAME_TASKS[self.room_id].cancel() # Gorevi iptal et
                 del GAME_TASKS[self.room_id]
-            await self.endOfGame()
 
 
     
@@ -250,8 +249,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                         self.game_over = True 
                         if self.room_id in GAME_TASKS:
                             GAME_TASKS[self.room_id].cancel()
-                            del GAME_TASKS[self.room_id]
-                
+                            del GAME_TASKS[self.room_id]         
                 else:
                     logger.error(f"{room.room_id} oda silindi Kazanan/Kaybeden olmadi.")
                     await sync_to_async(room.delete)()

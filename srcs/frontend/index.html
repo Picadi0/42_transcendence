@@ -729,12 +729,17 @@
                            gameModeContainer.style.display = 'flex';
                            singleplayerModeContainer.style.display = 'none';
                             backButtonContainer.style.display = 'none';
-                        game = null;
-                        websocket.close();
                         statusDiv.textContent = `Oyun sonlandı! Kazanan: ${data.Winner}`;
                         scoreDisplay.style.display = 'none';
                         isMultiplayer = false; // Reset isMultiplayer when disconnected
-
+                        removeKeyListeners();
+                        removeScrollListener();
+                        if(game?.gameLoop) {
+                            game.stopGameLoop();
+                        }
+                        game = null; // Reset game object
+                        roomID = null; // Reset roomID
+                        userID = null; // Reset userID
                     }
                 };
 
