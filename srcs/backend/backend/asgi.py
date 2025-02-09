@@ -12,10 +12,12 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mysite.settings")
 django_asgi_app = get_asgi_application()
 
 import game.routing
+import online_status.routing
 
 application = ProtocolTypeRouter({
     'http': get_asgi_application(),
     'websocket': URLRouter(
-    game.routing.websocket_urlpatterns
+    game.routing.websocket_urlpatterns +
+    online_status.routing.websocket_urlpatterns
     )
 })

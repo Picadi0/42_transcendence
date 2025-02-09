@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'channels',
     'game',
+    'online_status'
 ]
 
 REST_FRAMEWORK = {
